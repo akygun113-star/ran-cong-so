@@ -263,13 +263,27 @@ cv.addEventListener('touchend',e=>{if(!t0)return;const t=e.changedTouches[0],dx=
 $('quitBtn').onclick=()=>$('quit').classList.remove('hide');
 $('takeJob').onclick=()=>{$('quit').classList.add('hide');start()};
 snake=[{x:10,y:10},{x:9,y:10},{x:8,y:10}];dir='R';food={x:15,y:10,k:0};draw();loadLib();
+const FB_CONFIG={databaseURL:'https://ran-cong-default-rtdb.asia-southeast1.firebasedatabase.app'}; /* Dán cấu hình Firebase vào đây, dạng {apiKey:"...",authDomain:"...",databaseURL:"...",projectId:"...",appId:"..."} */
+function showCount(n,pl){const L=$('live');L.textContent='🟢 '+n+' người đang online · '+pl+' đang chơi';L.classList.remove('hide')}
 (async()=>{
   let room=null;try{room=await claude.use('room')}catch(e){}
-  if(!room)return;
-  const L=$('live');let lastP=null;
-  const show=()=>{const v=room.peers().filter(p=>p.kind==='viewer');if(!v.length)return;L.textContent='🟢 '+v.length+' người đang online · '+v.filter(p=>p.presence&&p.presence.playing===true).length+' đang chơi';L.classList.remove('hide')};
-  room.onPeers(show);
-  setInterval(()=>{const pl=running&&!paused;if(pl!==lastP){lastP=pl;room.presence({playing:pl})}},1000);
+  if(room){
+    let lastP=null;
+    room.onPeers(()=>{const v=room.peers().filter(p=>p.kind==='viewer');if(v.length)showCount(v.length,v.filter(p=>p.presence&&p.presence.playing===true).length)});
+    setInterval(()=>{const pl=running&&!paused;if(pl!==lastP){lastP=pl;room.presence({playing:pl})}},1000);
+    return;
+  }
+  if(!FB_CONFIG)return;
+  try{
+    const A=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+    const D=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js');
+    const db=D.getDatabase(A.initializeApp(FB_CONFIG));
+    const me=D.push(D.ref(db,'online'));
+    let last=false;
+    D.onValue(D.ref(db,'.info/connected'),sn=>{if(sn.val()===true){D.onDisconnect(me).remove();D.set(me,{p:last})}});
+    D.onValue(D.ref(db,'online'),sn=>{let n=0,pl=0;sn.forEach(c=>{n++;if(c.val()&&c.val().p===true)pl++});if(n)showCount(n,pl)});
+    setInterval(()=>{const pl=running&&!paused;if(pl!==last){last=pl;D.set(me,{p:pl})}},1000);
+  }catch(e){}
 })();
 </script>
 </body>
