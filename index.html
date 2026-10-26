@@ -26,9 +26,9 @@ canvas{width:100%;aspect-ratio:1;display:block;border-radius:12px;background:var
 .boss img{width:96px;height:96px;border-radius:50%;object-fit:cover;border:3px solid #ff5a4a;display:block}
 .hammer{position:absolute;right:-44px;top:-26px;font-size:3.2rem;transform-origin:20% 90%;animation:hit .5s ease-in-out infinite alternate}
 @keyframes hit{from{transform:rotate(-35deg)}to{transform:rotate(30deg)}}
-button{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:10px 22px;font-size:1rem;cursor:pointer}
-.pad{display:grid;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(2,56px);gap:6px;margin-top:12px}
-.pad button{padding:0;font-size:1.3rem;background:var(--panel);color:var(--text)}
+button{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:10px 22px;font-size:1rem;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+.pad{display:grid;grid-template-columns:repeat(3,78px);grid-template-rows:repeat(2,78px);gap:8px;margin-top:12px}
+.pad button{padding:0;font-size:1.7rem;background:var(--panel);color:var(--text)}
 .pad .u{grid-column:2}.pad .l{grid-row:2;grid-column:1}.pad .d{grid-row:2;grid-column:2}.pad .r{grid-row:2;grid-column:3}
 .sec{width:100%;max-width:420px;margin-top:16px;background:var(--panel);border-radius:12px;padding:12px}
 .sec h2{font-size:1rem;margin:0 0 8px}
@@ -63,7 +63,13 @@ button{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:1
 <div class="pad">
   <button class="u" data-d="U">▲</button><button class="l" data-d="L">◀</button><button class="d" data-d="D">▼</button><button class="r" data-d="R">▶</button>
 </div>
-<div class="hint">Phím mũi tên hoặc WASD, vuốt màn hình, hoặc bấm nút. Phím cách để tạm dừng. 📋 là sếp giao thêm việc: ăn thì rắn dài ra, trừ 2 điểm, nhưng làm xong 1 việc tồn. Không ăn thì việc tồn thêm 1, quá 5 bản là bị trừ lương, đình chỉ công tác. 💰 là thưởng cuối năm (+5 điểm, rắn ngắn bớt).</div>
+<div class="hint">Phím mũi tên hoặc WASD, vuốt màn hình, hay bấm nút để điều khiển. Phím cách để tạm dừng.</div>
+<div class="sec" style="margin-top:12px;font-size:.88rem;line-height:1.6">
+  <div>👩‍💼 <b>Nhân viên</b>: ăn để được +1 điểm.</div>
+  <div>📋 <b>Việc sếp giao</b>: nhận (ăn) thì rắn chạy nhanh hơn trong 2 giây, không mất điểm, bớt 1 việc tồn, và 2 💰 nổ ra ở khắp bản đồ. Bỏ qua thì mất 2 điểm và tồn thêm 1 việc.</div>
+  <div>🔨 <b>Tồn quá 5 việc</b>: bị đình chỉ công tác (hết game) và trừ lương 5 điểm.</div>
+  <div>💰 <b>Thưởng KPI</b>: +5 điểm, rắn ngắn bớt. Chỉ hiện vài giây.</div>
+</div>
 
 <div class="sec">
   <h2>📚 Thư viện ảnh (<span id="cnt">0</span>/50)</h2>
@@ -91,7 +97,7 @@ const ov=$('ov'),msg=$('msg'),go=$('go'),scoreEl=$('score'),bestEl=$('best'),blE
 const EMP=['👩‍💼','👨‍💼','🧑‍💻','👩‍💻','👨‍🔧','🧑‍🎨'];
 const QUOTES=['Em ơi, anh cần gấp trong chiều nay','Việc này dễ mà, làm tí là xong','Cuối tuần em có rảnh không?','Sáng mai anh cần file nhé, em gửi tối nay','Team mình là một gia đình','Em chưa thấy KPI tháng này đâu nhé','Sửa lại một chút xíu thôi mà'];
 const faces={head:null,boss:null,happy:null,bossUrl:'',staff:[]};
-let snake,dir,next,food,score,best=0,timer,running=false,paused=false,dead=false,speed,extra=null,pend=0,backlog=0,quote='',quoteE='😡',quoteH=false,quoteT=0;
+let q=[],snake,dir,next,food,score,best=0,timer,running=false,paused=false,dead=false,speed,xs=[],boost=false,boostT=0,pend=0,backlog=0,quote='',quoteE='😡',quoteH=false,quoteT=0;
 try{best=+localStorage.getItem('snake-best')||0}catch(e){}
 bestEl.textContent=best;
 const V={U:[0,-1],D:[0,1],L:[-1,0],R:[1,0]},ANG={R:0,D:Math.PI/2,L:Math.PI,U:-Math.PI/2};
@@ -99,26 +105,33 @@ function css(n){return getComputedStyle(document.documentElement).getPropertyVal
 function setBl(v){backlog=Math.max(0,v);blEl.textContent=backlog+'/5';blEl.style.color=backlog>=4?'#ff5a4a':''}
 function say(t,e,h){quote=t;quoteE=e||'😡';quoteH=!!h;quoteT=45}
 function place(){do{food={x:Math.floor(Math.random()*N),y:Math.floor(Math.random()*N),k:Math.floor(Math.random()*99)}}while(snake.some(s=>s.x===food.x&&s.y===food.y))}
+function applyTimer(){clearInterval(timer);timer=setInterval(tick,boost?Math.max(40,Math.round(speed*.55)):speed)}
+function freeCell(){let x,y;do{x=Math.floor(Math.random()*N);y=Math.floor(Math.random()*N)}while(snake.some(s=>s.x===x&&s.y===y)||(x===food.x&&y===food.y)||xs.some(e=>e.x===x&&e.y===y));return{x,y}}
+function addEx(t,ttl){xs.push(Object.assign({t,ttl},freeCell()))}
 function spawnExtra(){
-  if(extra)return;const r=Math.random();
-  if(r<.2)extra={t:'bonus',ttl:50};else if(r<.5){extra={t:'task',ttl:95};say('Em làm thêm cho anh cái này nhé')}else return;
-  do{extra.x=Math.floor(Math.random()*N);extra.y=Math.floor(Math.random()*N)}while(snake.some(s=>s.x===extra.x&&s.y===extra.y)||(extra.x===food.x&&extra.y===food.y));
+  if(xs.some(e=>e.t==='task'))return;const r=Math.random();
+  if(r<.2)addEx('bonus',50);
+  else if(r<.5){addEx('task',95);say('Em làm thêm cho anh cái này nhé')}
 }
-function start(){snake=[{x:10,y:10},{x:9,y:10},{x:8,y:10}];dir=next='R';score=0;speed=130;dead=false;extra=null;pend=0;quoteT=0;setBl(0);$('quitBtn').classList.add('hide');scoreEl.textContent=0;place();running=true;paused=false;ov.classList.add('hide');clearInterval(timer);timer=setInterval(tick,speed);draw()}
-function turn(d){const a=V[d],b=V[dir];if(a[0]+b[0]===0&&a[1]+b[1]===0)return;next=d}
+function start(){snake=[{x:10,y:10},{x:9,y:10},{x:8,y:10}];dir=next='R';q=[];score=0;speed=130;dead=false;xs=[];pend=0;quoteT=0;setBl(0);$('quitBtn').classList.add('hide');scoreEl.textContent=0;place();running=true;paused=false;ov.classList.add('hide');boost=false;clearTimeout(boostT);applyTimer();draw()}
+function turn(d){const l=q.length?q[q.length-1]:dir,a=V[d],b=V[l];if(d===l||(a[0]+b[0]===0&&a[1]+b[1]===0))return;if(q.length<3)q.push(d)}
 function tick(){
-  if(paused)return;dir=next;const h=snake[0],v=V[dir];
+  if(paused)return;if(q.length)dir=q.shift();const h=snake[0],v=V[dir];
   const n={x:h.x+v[0],y:h.y+v[1]};
   if(n.x<0||n.y<0||n.x>=N||n.y>=N||snake.some(s=>s.x===n.x&&s.y===n.y))return over();
   snake.unshift(n);
   if(quoteT>0)quoteT--;
-  if(extra&&--extra.ttl<=0){const w=extra.t==='task';extra=null;if(w){setBl(backlog+1);if(backlog>5)return over('suspend');say('Việc tồn '+backlog+'/5, coi chừng bị trừ lương!')}}
-  let keep=pend>0,shrink=0;if(keep)pend--;
-  if(n.x===food.x&&n.y===food.y){score++;keep=true;if(score%5===0){say(QUOTES[(score/5-1)%QUOTES.length]);if(speed>60){speed-=10;clearInterval(timer);timer=setInterval(tick,speed)}}place();spawnExtra()}
-  else if(extra&&n.x===extra.x&&n.y===extra.y){
-    if(extra.t==='task'){score=Math.max(0,score-2);keep=true;pend++;setBl(backlog-1);say('Em ơi, thêm việc này nhé, gấp lắm!')}
-    else{score+=5;shrink=2;say('Thưởng cuối năm cho em đây, cố phát huy nhé!','🤑',true)}
-    extra=null;
+  for(const e of xs)e.ttl--;
+  const gone=xs.filter(e=>e.ttl<=0);xs=xs.filter(e=>e.ttl>0);
+  for(const e of gone)if(e.t==='task'){score=Math.max(0,score-2);setBl(backlog+1);if(backlog>5)return over('suspend');say('Bỏ việc sếp giao, trừ 2 điểm! Việc tồn '+backlog+'/5')}
+  let keep=false,shrink=0;
+  if(n.x===food.x&&n.y===food.y){score++;keep=true;if(score%5===0){say(QUOTES[(score/5-1)%QUOTES.length]);if(speed>60){speed-=10;applyTimer()}}place();spawnExtra()}
+  else{
+    const k=xs.findIndex(e=>e.x===n.x&&e.y===n.y);
+    if(k>=0){const e=xs.splice(k,1)[0];
+      if(e.t==='task'){setBl(backlog-1);boost=true;applyTimer();clearTimeout(boostT);boostT=setTimeout(()=>{boost=false;if(running)applyTimer()},2000);addEx('bonus',70);addEx('bonus',70);say('Nhận việc rồi thì tăng ca nhé, thưởng KPI đang nổ khắp nơi!')}
+      else{score+=5;shrink=2;say('Thưởng KPI cho em đây, cố phát huy nhé!','🤑',true)}
+    }
   }
   if(!keep)snake.pop();
   while(shrink-->0&&snake.length>3)snake.pop();
@@ -126,7 +139,7 @@ function tick(){
   draw();
 }
 function over(r){
-  running=false;dead=true;clearInterval(timer);
+  running=false;dead=true;clearInterval(timer);boost=false;clearTimeout(boostT);
   if(r==='suspend')score=Math.max(0,score-5);
   scoreEl.textContent=score;draw();
   if(score>best){best=score;bestEl.textContent=best;try{localStorage.setItem('snake-best',best)}catch(e){}}
@@ -145,7 +158,7 @@ function draw(){
   const fx=food.x*S+S/2,fy=food.y*S+S/2;
   if(faces.staff.length)disc(faces.staff[food.k%faces.staff.length],fx,fy,S*.75);else emoji(EMP[food.k%EMP.length],fx,fy,S*1.15);
   for(let i=snake.length-1;i>=1;i--){const s=snake[i];ctx.fillStyle=css('--snake');ctx.beginPath();ctx.roundRect(s.x*S+1,s.y*S+1,S-2,S-2,5);ctx.fill()}
-  if(extra&&!(extra.ttl<15&&extra.ttl%2))emoji(extra.t==='task'?'📋':'💰',extra.x*S+S/2,extra.y*S+S/2,S*1.2);
+  xs.forEach(e=>{if(!(e.ttl<15&&e.ttl%2))emoji(e.t==='task'?'📋':'💰',e.x*S+S/2,e.y*S+S/2,S*1.2)});
   if(quoteT>0){const bi=quoteH?(faces.happy||faces.boss):faces.boss;ctx.font='600 14px system-ui,sans-serif';const fb=!!bi,q=fb?quote:quoteE+' '+quote,pw=fb?34:0,w=ctx.measureText(q).width+20+pw,x0=(cv.width-w)/2;ctx.fillStyle='rgba(0,0,0,.78)';ctx.beginPath();ctx.roundRect(x0,6,w,36,12);ctx.fill();if(fb)disc(bi,x0+22,24,14);ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(q,x0+pw+(w-pw)/2,24)}
   const h=snake[0],cx=h.x*S+S/2,cy=h.y*S+S/2;
   if(dead){emoji('😵',cx,cy,S*1.7);return}
@@ -255,12 +268,15 @@ addEventListener('keydown',e=>{
   if(m){e.preventDefault();if(!running)return start();turn(m)}
   else if(e.key===' '){e.preventDefault();if(!running)return start();paused=!paused;msg.textContent='Đang họp, tạm dừng';go.textContent='Làm tiếp';ov.classList.toggle('hide',!paused)}
 });
-document.querySelectorAll('.pad button').forEach(b=>b.onclick=()=>{if(!running)start();else turn(b.dataset.d)});
-let t0;
-cv.addEventListener('touchstart',e=>{t0=e.touches[0]},{passive:true});
-cv.addEventListener('touchend',e=>{if(!t0)return;const t=e.changedTouches[0],dx=t.clientX-t0.clientX,dy=t.clientY-t0.clientY;
-  if(Math.max(Math.abs(dx),Math.abs(dy))<20)return;if(!running)return start();
-  turn(Math.abs(dx)>Math.abs(dy)?(dx>0?'R':'L'):(dy>0?'D':'U'))});
+document.querySelectorAll('.pad button').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();if(!running)start();else turn(b.dataset.d)}));
+let t0=null;
+cv.addEventListener('touchstart',e=>{t0={x:e.touches[0].clientX,y:e.touches[0].clientY}},{passive:true});
+cv.addEventListener('touchmove',e=>{if(!t0)return;e.preventDefault();const t=e.touches[0],dx=t.clientX-t0.x,dy=t.clientY-t0.y;
+  if(Math.max(Math.abs(dx),Math.abs(dy))<16)return;
+  t0={x:t.clientX,y:t.clientY};
+  if(!running){start();return}
+  turn(Math.abs(dx)>Math.abs(dy)?(dx>0?'R':'L'):(dy>0?'D':'U'))},{passive:false});
+cv.addEventListener('touchend',()=>{t0=null});
 $('quitBtn').onclick=()=>$('quit').classList.remove('hide');
 $('takeJob').onclick=()=>{$('quit').classList.add('hide');start()};
 snake=[{x:10,y:10},{x:9,y:10},{x:8,y:10}];dir='R';food={x:15,y:10,k:0};draw();loadLib();
