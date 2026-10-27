@@ -49,6 +49,9 @@ button{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:1
 .card{background:var(--panel);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;align-items:center;max-width:320px;width:100%}
 .card canvas{width:260px;height:260px;aspect-ratio:auto;cursor:grab}
 .row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.nmin{padding:8px 10px;border-radius:10px;border:1px solid var(--grid);background:var(--bg);color:var(--text);font-size:1rem;flex:1;min-width:0}
+.rk{padding:5px 0;border-bottom:1px solid var(--grid);font-size:.95rem}
+.rk.me{font-weight:700;color:var(--accent)}
 </style>
 </head>
 <body>
@@ -69,9 +72,16 @@ button{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:1
 <div class="hint">Phím mũi tên hoặc WASD, vuốt màn hình, hay bấm nút để điều khiển. Phím cách để tạm dừng.</div>
 <div class="sec" style="margin-top:12px;font-size:.88rem;line-height:1.6">
   <div>👩‍💼 <b>Nhân viên</b>: ăn để được +1 điểm.</div>
-  <div>📋 <b>Việc sếp giao</b>: nhận (ăn) thì rắn chạy nhanh hơn trong 2 giây, không mất điểm, bớt 1 việc tồn, và 2 💰 nổ ra ở khắp bản đồ. Bỏ qua thì mất 2 điểm và tồn thêm 1 việc.</div>
+  <div>📋 <b>Việc sếp giao</b> (hiện 6 giây): nhận (ăn) thì rắn chạy nhanh hơn trong 3 giây, không mất điểm, bớt 1 việc tồn, và 3 💵 nổ ra khắp bản đồ (mỗi đồng +1 điểm, hiện 3 giây). Bỏ qua thì mất 2 điểm và tồn thêm 1 việc.</div>
   <div>🔨 <b>Tồn quá 5 việc</b>: bị đình chỉ công tác (hết game) và trừ lương 5 điểm.</div>
-  <div>💰 <b>Thưởng KPI</b>: mỗi đồng +1 điểm, rắn ngắn bớt. Chỉ hiện 3 giây là mất.</div>
+  <div>💰 <b>Thưởng KPI</b>: +5 điểm, rắn ngắn bớt. Chỉ hiện 3 giây.</div>
+</div>
+
+<div class="sec hide" id="board">
+  <h2>🏆 Bảng xếp hạng</h2>
+  <div class="row" style="justify-content:flex-start;flex-wrap:nowrap"><input id="nm" class="nmin" maxlength="20" placeholder="Tên của bạn" autocomplete="off"><button class="fb" id="nmBtn">Lưu tên</button></div>
+  <div class="st" id="nmSt">Nhập tên để điểm của bạn lên bảng sau mỗi ván.</div>
+  <div id="rank" style="margin-top:8px"></div>
 </div>
 
 <div class="sec">
@@ -112,13 +122,14 @@ const TOUCH=matchMedia('(pointer: coarse)').matches;
 function lock(on){if(!TOUCH)return;document.documentElement.classList.toggle('playing',on);if(on)scrollTo(0,0)}
 function applyTimer(){clearInterval(timer);timer=setInterval(tick,boost?Math.max(40,Math.round(speed*.55)):speed)}
 function freeCell(){let x,y;do{x=Math.floor(Math.random()*N);y=Math.floor(Math.random()*N)}while(snake.some(s=>s.x===x&&s.y===y)||(x===food.x&&y===food.y)||xs.some(e=>e.x===x&&e.y===y));return{x,y}}
-function addEx(t,ttl){xs.push(Object.assign({t,ttl,exp:Date.now()+(t==='bonus'?3000:0)},freeCell()))}
+const DUR={task:6000,coin:3000,bonus:3000};
+function addEx(t){xs.push(Object.assign({t,exp:Date.now()+DUR[t]},freeCell()))}
 function spawnExtra(){
   if(xs.some(e=>e.t==='task'))return;const r=Math.random();
-  if(r<.2)addEx('bonus',50);
-  else if(r<.5){addEx('task',95);say('Em làm thêm cho anh cái này nhé')}
+  if(r<.2)addEx('bonus');
+  else if(r<.5){addEx('task');say('Em làm thêm cho anh cái này nhé')}
 }
-function start(){snake=[{x:10,y:10},{x:9,y:10},{x:8,y:10}];dir=next='R';q=[];score=0;speed=130;dead=false;xs=[];pend=0;quoteT=0;setBl(0);$('quitBtn').classList.add('hide');scoreEl.textContent=0;place();running=true;paused=false;lock(true);ov.classList.add('hide');boost=false;clearTimeout(boostT);applyTimer();draw()}
+function start(){snake=[{x:10,y:10},{x:9,y:10},{x:8,y:10}];dir=next='R';q=[];score=0;speed=130;dead=false;lastScore=null;xs=[];pend=0;quoteT=0;setBl(0);$('quitBtn').classList.add('hide');scoreEl.textContent=0;place();running=true;paused=false;lock(true);ov.classList.add('hide');boost=false;clearTimeout(boostT);applyTimer();draw()}
 function turn(d){const l=q.length?q[q.length-1]:dir,a=V[d],b=V[l];if(d===l||(a[0]+b[0]===0&&a[1]+b[1]===0))return;if(q.length<3)q.push(d)}
 function tick(){
   if(paused)return;if(q.length)dir=q.shift();const h=snake[0],v=V[dir];
@@ -126,16 +137,16 @@ function tick(){
   if(n.x<0||n.y<0||n.x>=N||n.y>=N||snake.some(s=>s.x===n.x&&s.y===n.y))return over();
   snake.unshift(n);
   if(quoteT>0)quoteT--;
-  for(const e of xs)if(e.t==='task')e.ttl--;
-  const now=Date.now(),gone=xs.filter(e=>e.t==='task'?e.ttl<=0:now>=e.exp);xs=xs.filter(e=>!gone.includes(e));
+  const now=Date.now(),gone=xs.filter(e=>now>=e.exp);xs=xs.filter(e=>!gone.includes(e));
   for(const e of gone)if(e.t==='task'){score=Math.max(0,score-2);setBl(backlog+1);if(backlog>5)return over('suspend');say('Bỏ việc sếp giao, trừ 2 điểm! Việc tồn '+backlog+'/5')}
   let keep=false,shrink=0;
   if(n.x===food.x&&n.y===food.y){score++;keep=true;if(score%5===0){say(QUOTES[(score/5-1)%QUOTES.length]);if(speed>60){speed-=10;applyTimer()}}place();spawnExtra()}
   else{
     const k=xs.findIndex(e=>e.x===n.x&&e.y===n.y);
     if(k>=0){const e=xs.splice(k,1)[0];
-      if(e.t==='task'){setBl(backlog-1);boost=true;applyTimer();clearTimeout(boostT);boostT=setTimeout(()=>{boost=false;if(running)applyTimer()},2000);addEx('bonus',70);addEx('bonus',70);say('Nhận việc rồi thì tăng ca nhé, thưởng KPI đang nổ khắp nơi!')}
-      else{score+=1;shrink=2;say('Thưởng KPI cho em đây, cố phát huy nhé!','🤑',true)}
+      if(e.t==='task'){setBl(backlog-1);boost=true;applyTimer();clearTimeout(boostT);boostT=setTimeout(()=>{boost=false;if(running)applyTimer()},3000);addEx('coin');addEx('coin');addEx('coin');say('Nhận việc rồi thì tăng ca nhé, tiền thưởng đang nổ khắp nơi!')}
+      else if(e.t==='coin'){score+=1}
+      else{score+=5;shrink=2;say('Thưởng KPI cho em đây, cố phát huy nhé!','🤑',true)}
     }
   }
   if(!keep)snake.pop();
@@ -151,7 +162,9 @@ function over(r){
   const b=faces.bossUrl?'<img src="'+faces.bossUrl+'" alt="Sếp">':'😡';
   const hd=r==='suspend'?'BỊ ĐÌNH CHỈ CÔNG TÁC!':'KHÔNG ĐẠT KPI!';
   const sub=r==='suspend'?'Việc tồn quá 5 bản, trừ lương 5 điểm. Còn '+score+' điểm':'Deadline đã nuốt '+score+' nhân viên';
-  msg.innerHTML='<div class="boss">'+b+'<span class="hammer">🔨</span></div><div class="kpi">'+hd+'</div><div>'+sub+'</div>';
+  lastScore=score;sent=false;submitScore();
+  const bm=FB?(myName?'🏆 Đang gửi điểm lên bảng xếp hạng...':'🏆 Nhập tên ở mục Bảng xếp hạng bên dưới để lưu điểm'):'';
+  msg.innerHTML='<div class="boss">'+b+'<span class="hammer">🔨</span></div><div class="kpi">'+hd+'</div><div>'+sub+'</div>'+(bm?'<div style="font-size:.85rem;opacity:.9">'+bm+'</div>':'');
   go.textContent='Xin sếp cho làm lại';$('quitBtn').classList.remove('hide');ov.classList.remove('hide');
 }
 function emoji(t,x,y,size){ctx.font=size+'px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(t,x,y)}
@@ -163,7 +176,7 @@ function draw(){
   const fx=food.x*S+S/2,fy=food.y*S+S/2;
   if(faces.staff.length)disc(faces.staff[food.k%faces.staff.length],fx,fy,S*.75);else emoji(EMP[food.k%EMP.length],fx,fy,S*1.15);
   for(let i=snake.length-1;i>=1;i--){const s=snake[i];ctx.fillStyle=css('--snake');ctx.beginPath();ctx.roundRect(s.x*S+1,s.y*S+1,S-2,S-2,5);ctx.fill()}
-  xs.forEach(e=>{const bl=e.t==='task'?(e.ttl<15&&e.ttl%2):(e.exp-Date.now()<700&&Math.floor(Date.now()/120)%2);if(!bl)emoji(e.t==='task'?'📋':'💰',e.x*S+S/2,e.y*S+S/2,S*1.2)});
+  xs.forEach(e=>{const bl=e.exp-Date.now()<700&&Math.floor(Date.now()/120)%2;if(!bl)emoji(e.t==='task'?'📋':e.t==='coin'?'💵':'💰',e.x*S+S/2,e.y*S+S/2,S*1.2)});
   if(quoteT>0){const bi=quoteH?(faces.happy||faces.boss):faces.boss;ctx.font='600 14px system-ui,sans-serif';const fb=!!bi,q=fb?quote:quoteE+' '+quote,pw=fb?34:0,w=ctx.measureText(q).width+20+pw,x0=(cv.width-w)/2;ctx.fillStyle='rgba(0,0,0,.78)';ctx.beginPath();ctx.roundRect(x0,6,w,36,12);ctx.fill();if(fb)disc(bi,x0+22,24,14);ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(q,x0+pw+(w-pw)/2,24)}
   const h=snake[0],cx=h.x*S+S/2,cy=h.y*S+S/2;
   if(dead){emoji('😵',cx,cy,S*1.7);return}
@@ -268,6 +281,7 @@ $('eds').onclick=()=>{
 /* ---- Điều khiển ---- */
 go.onclick=()=>{if(running&&paused){paused=false;ov.classList.add('hide')}else if(!running)start()};
 addEventListener('keydown',e=>{
+  if(e.target&&e.target.tagName==='INPUT')return;
   if(!$('ed').classList.contains('hide')||!$('quit').classList.contains('hide'))return;
   const m={ArrowUp:'U',ArrowDown:'D',ArrowLeft:'L',ArrowRight:'R',w:'U',s:'D',a:'L',d:'R',W:'U',S:'D',A:'L',D:'R'}[e.key];
   if(m){e.preventDefault();if(!running)return start();turn(m)}
@@ -284,6 +298,29 @@ document.addEventListener('touchend',()=>{t0=null});
 $('quitBtn').onclick=()=>$('quit').classList.remove('hide');
 $('takeJob').onclick=()=>{$('quit').classList.add('hide');start()};
 snake=[{x:10,y:10},{x:9,y:10},{x:8,y:10}];dir='R';food={x:15,y:10,k:0};draw();loadLib();
+let FB=null,myName='',lastScore=null,sent=false;
+try{myName=localStorage.getItem('dl-name')||''}catch(e){}
+function keyOf(n){return encodeURIComponent(n.toLowerCase()).replace(/\./g,'%2E')}
+function boardInit(){
+  $('board').classList.remove('hide');$('nm').value=myName;
+  const D=FB.D;
+  D.onValue(D.query(D.ref(FB.db,'scores'),D.orderByChild('s'),D.limitToLast(10)),sn=>{
+    const a=[];sn.forEach(c=>{a.push(c.val())});a.reverse();
+    const L=$('rank');L.innerHTML='';
+    if(!a.length){L.textContent='Chưa có ai lên bảng. Bạn có thể là người đầu tiên!';return}
+    a.forEach((v,i)=>{const d=document.createElement('div');d.className='rk'+(myName&&String(v.n).toLowerCase()===myName.toLowerCase()?' me':'');d.textContent=(['🥇','🥈','🥉'][i]||(i+1)+'.')+' '+v.n+' — '+v.s+' điểm';L.appendChild(d)});
+  });
+}
+async function submitScore(){
+  if(!FB||!myName||lastScore==null||lastScore<=0||sent)return;
+  const sc=lastScore;sent=true;
+  try{
+    const D=FB.D,r=D.ref(FB.db,'scores/'+keyOf(myName)),sn=await D.get(r);
+    if(!sn.exists()||sn.val().s<sc)await D.set(r,{n:myName,s:sc,t:D.serverTimestamp()});
+    $('nmSt').textContent='Đã gửi điểm '+sc+' lên bảng xếp hạng (bảng chỉ giữ điểm cao nhất của mỗi tên).';
+  }catch(e){sent=false;$('nmSt').textContent='Không gửi được điểm. Kiểm tra lại luật Rules trên Firebase.'}
+}
+$('nmBtn').onclick=()=>{const n=$('nm').value.trim().slice(0,20);if(!n)return;myName=n;try{localStorage.setItem('dl-name',n)}catch(e){}$('nmSt').textContent='Đã lưu tên.';submitScore()};
 const FB_CONFIG={databaseURL:'https://ran-cong-default-rtdb.asia-southeast1.firebasedatabase.app'}; /* Dán cấu hình Firebase vào đây, dạng {apiKey:"...",authDomain:"...",databaseURL:"...",projectId:"...",appId:"..."} */
 function showCount(n,pl){const L=$('live');L.textContent='🟢 '+n+' người đang online · '+pl+' đang chơi';L.classList.remove('hide')}
 (async()=>{
@@ -298,7 +335,7 @@ function showCount(n,pl){const L=$('live');L.textContent='🟢 '+n+' người đ
   try{
     const A=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
     const D=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js');
-    const db=D.getDatabase(A.initializeApp(FB_CONFIG));
+    const db=D.getDatabase(A.initializeApp(FB_CONFIG));FB={D,db};boardInit();
     const me=D.push(D.ref(db,'online'));
     let last=false;
     D.onValue(D.ref(db,'.info/connected'),sn=>{if(sn.val()===true){D.onDisconnect(me).remove();D.set(me,{p:last})}});
